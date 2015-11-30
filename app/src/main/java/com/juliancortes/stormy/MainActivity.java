@@ -1,6 +1,7 @@
 package com.juliancortes.stormy;
 
 import android.content.Context;
+import android.graphics.drawable.Drawable;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Bundle;
@@ -13,6 +14,9 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.ImageView;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.squareup.okhttp.Call;
@@ -26,44 +30,72 @@ import org.json.JSONObject;
 
 import java.io.IOException;
 
+import butterknife.Bind;
+import butterknife.ButterKnife;
+
 public class MainActivity extends AppCompatActivity {
 
     public static final String TAG = MainActivity.class.getSimpleName();
     private CurrentWeather mCurrentWeather;
 
+
+    @Bind(R.id.timeLabel) TextView mTimeLabel;
+    @Bind(R.id.temperatureLabel) TextView mTemperatureLabel;
+    @Bind(R.id.humidityValue) TextView mHumidityValue;
+    @Bind(R.id.precipValue) TextView mPrecipValue;
+    @Bind(R.id.summaryLabel) TextView mSummaryLabel;
+    @Bind(R.id.iconImageView) ImageView mIconImageView;
+    @Bind(R.id.locationLabel) TextView mTimeZone;
+    @Bind(R.id.RefreshImageView) ImageView mRefreshImageView;
+    @Bind(R.id.progressBar) ProgressBar mProgressBar;
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
-
-        FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
-        fab.setOnClickListener(new View.OnClickListener() {
+        ButterKnife.bind(this);
+        mProgressBar.setVisibility(View.INVISIBLE);
+        mRefreshImageView.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View view) {
-                Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                        .setAction("Action", null).show();
+            public void onClick(View v) {
+                getForecast(3.387611, -76.5161995);
             }
         });
+        getForecast(3.387611, -76.5161995);
 
+    }
+
+    private void getForecast(double latitude, double longitude) {
         String apiKey = "3e15623bdbb4b327c96d0e5ae221e4e8";
-        double latitude = 37.8267;
-        double longitude = -122.423;
+
 
         String forecastUrl = "https://api.forecast.io/forecast/"
                 +apiKey+"/"+latitude+","+longitude;
         if(NetworkAvailable()) {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    toggleRefresh();
+                }
+            });
 
             OkHttpClient client = new OkHttpClient();
             Request request = new Request.Builder()
                     .url(forecastUrl)
                     .build();
             Call call = client.newCall(request);
+
             call.enqueue(new Callback() {
                 @Override
                 public void onFailure(Request request, IOException e) {
-
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            toggleRefresh();
+                        }
+                    });
+                    alertUserAboutAnError();
                 }
 
                 @Override
@@ -71,10 +103,24 @@ public class MainActivity extends AppCompatActivity {
                     try {
                         // Response response = call.execute(); Esto produce un error pues estamos ejecutando un llamado
                         // en la actividad principal por lo que usamos un Callback
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                toggleRefresh();
+                            }
+                        });
+
+
                         String jsonData = response.body().string();
                         Log.v(TAG, jsonData);
                         if (response.isSuccessful()) {
                             mCurrentWeather = getCurrentDetails(jsonData);
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    updateDisplay();
+                                }
+                            });
                         } else {
                             alertUserAboutAnError();
                         }
@@ -88,6 +134,30 @@ public class MainActivity extends AppCompatActivity {
         }else {
             Toast.makeText(this, getString(R.string.network_unavailable_message), Toast.LENGTH_LONG).show();
         }
+    }
+
+    private void toggleRefresh() {
+        if(mProgressBar.getVisibility() == View.INVISIBLE){
+            mProgressBar.setVisibility(View.VISIBLE);
+            mRefreshImageView.setVisibility(View.INVISIBLE);
+        }else{
+            mProgressBar.setVisibility(View.INVISIBLE);
+            mRefreshImageView.setVisibility(View.VISIBLE);
+        }
+
+    }
+
+    private void updateDisplay() {
+        mTemperatureLabel.setText(mCurrentWeather.getTemperature() + "");
+        mHumidityValue.setText(mCurrentWeather.getHumidity() + "");
+        mPrecipValue.setText(mCurrentWeather.getPrecipChance() + "%");
+        mSummaryLabel.setText(mCurrentWeather.getSummary() + "");
+        mTimeLabel.setText("At " + mCurrentWeather.getFormattedTime() + "it will be");
+        mTimeZone.setText(mCurrentWeather.getTimeZone()+ "");
+
+        Drawable drawable = getResources().getDrawable(mCurrentWeather.getIconId());
+        mIconImageView.setImageDrawable(drawable);
+
 
 
     }
